@@ -7,13 +7,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
     gnupg \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install ODBC Driver for SQL Server
-RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
-    && curl https://packages.microsoft.com/config/debian/11/prod.list > /etc/apt/sources.list.d/mssql-release.list \
-    && apt-get update \
-    && ACCEPT_EULA=Y apt-get install -y msodbcsql18 \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first to leverage Docker cache
@@ -34,11 +28,6 @@ ENV PYTHONUNBUFFERED=1
 FROM python:3.11-slim
 
 WORKDIR /app
-
-# Copy system dependencies and ODBC driver from builder
-COPY --from=builder /usr/lib/x86_64-linux-gnu/odbc /usr/lib/x86_64-linux-gnu/odbc
-COPY --from=builder /etc/odbcinst.ini /etc/odbcinst.ini
-COPY --from=builder /etc/odbc.ini /etc/odbc.ini
 
 # Copy Python packages and application code
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
