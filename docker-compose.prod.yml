@@ -1,0 +1,186 @@
+# docker-compose.prod.yml — PRODUCTION OVERRIDES
+# Never auto-loaded. Use explicitly:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# This file only extends services already in docker-compose.yml.
+# It does NOT redefine db/redis/celery/flower from scratch.
+
+services:
+
+  postgres:
+    # In production the DB port must NOT be exposed to the host.
+    # The base file binds to 127.0.0.1:5432 — override removes the host binding entirely.
+    ports: []
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-topworx_db}
+      POSTGRES_USER: ${POSTGRES_USER:-topworx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  redis:
+    # Production: stricter memory policy, keep auth
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --maxmemory-samples 10
+      --lazyfree-lazy-eviction yes
+      --lazyfree-lazy-expire yes
+      --lazyfree-lazy-server-del yes
+    # No host port exposure in production
+    ports: []
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.2'
+          memory: 256M
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+    # No source mount in production — the image IS the artifact
+    volumes:
+      - backend_logs:/app/logs
+      - media_files:/app/media
+      - backend_uploads:/app/uploads
+    ports:
+      - "8000:8000"
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  celery:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+    command: celery -A app.worker worker --loglevel=info --concurrency=8
+    volumes:
+      - backend_uploads:/app/uploads
+      - celery_logs:/app/logs
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    # Protect with basic auth in production
+    command: >
+      celery -A app.worker flower
+      --port=5555
+      --broker=${CELERY_BROKER_URL}
+      --basic_auth=${FLOWER_USER:-admin}:${FLOWER_PASSWORD}
+    volumes:
+      - flower_logs:/app/logs
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: ./topworx-new
+      dockerfile: Dockerfile.prod
+    environment:
+      - NODE_ENV=production
+      - REACT_APP_API_URL=${REACT_APP_API_URL}
+      - REACT_APP_ENVIRONMENT=production
+    # No source mount in production
+    ports:
+      - "3000:3000"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx:
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - media_files:/var/www/media:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

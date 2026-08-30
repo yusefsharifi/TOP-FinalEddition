@@ -1,0 +1,37 @@
+{
+  "template": "topworx-*",
+  "version": 1,
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "refresh_interval": "5s"
+  },
+  "mappings": {
+    "properties": {
+      "@timestamp": {
+        "type": "date"
+      },
+      "timestamp": {
+        "type": "date"
+      },
+      "level": {
+        "type": "keyword"
+      },
+      "message": {
+        "type": "text"
+      },
+      "type": {
+        "type": "keyword"
+      },
+      "host": {
+        "type": "keyword"
+      },
+      "path": {
+        "type": "keyword"
+      },
+      "tags": {
+        "type": "keyword"
+      }
+    }
+  }
+} 

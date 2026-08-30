@@ -1,0 +1,58 @@
+# docker-compose.dev.yml — EXPLICIT DEVELOPMENT ALTERNATIVE
+# NOT auto-loaded. Use explicitly when you want full control:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Difference from override.yml:
+#   docker-compose.override.yml is silently applied on every plain `docker compose` call.
+#   This file is only applied when you name it explicitly — useful for CI or
+#   when you want to test the dev stack from a clean state without the override.
+#
+# Note: If you run both override.yml and dev.yml together, dev.yml wins for
+# conflicting keys since it is listed last on the command line.
+
+services:
+
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  backend:
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+    volumes:
+      - ./backend:/app
+      - backend_uploads:/app/uploads
+      - backend_logs:/app/logs
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  celery:
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+    volumes:
+      - ./backend:/app
+      - celery_logs:/app/logs
+    command: celery -A app.worker worker --loglevel=debug --concurrency=1
+
+  flower:
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./backend:/app
+      - flower_logs:/app/logs
+
+  frontend:
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - REACT_APP_API_URL=http://localhost:8000/api
+      - REACT_APP_ENVIRONMENT=development
+    volumes:
+      - ./topworx-new:/app
+      - /app/node_modules
+    command: npm start

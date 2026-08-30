@@ -1,0 +1,210 @@
+# docker-compose.yml — BASE FILE
+# Defines every service that exists in this project.
+# Override files may only extend services declared here.
+#
+# Development (auto-loads override.yml):  docker compose up
+# Production:  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+
+  # ── Database ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: topworx_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-topworx_db}
+      POSTGRES_USER: ${POSTGRES_USER:-topworx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    networks:
+      - topworx_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-topworx} -d ${POSTGRES_DB:-topworx_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── Cache / Message Broker ────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: topworx_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - topworx_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend API ───────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: topworx_backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - SQLALCHEMY_DATABASE_URI=${SQLALCHEMY_DATABASE_URI}
+      - REDIS_URL=${REDIS_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=${ALGORITHM:-HS256}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-52428800}
+      - ALLOWED_EXTENSIONS=${ALLOWED_EXTENSIONS:-.pdf,.docx,.xlsx,.png,.jpg,.jpeg}
+      - UPLOAD_DIR=${UPLOAD_DIR:-uploads}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_TLS=${SMTP_TLS:-true}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL:-noreply@topworx.com}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+      - COMPANY_ECONOMIC_CODE=${COMPANY_ECONOMIC_CODE}
+      - COMPANY_TAX_ID=${COMPANY_TAX_ID}
+    volumes:
+      - backend_logs:/app/logs
+      - media_files:/app/media
+      - backend_uploads:/app/uploads
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - topworx_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ── Celery Worker ─────────────────────────────────────────────────────────
+  celery:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: topworx_celery
+    restart: unless-stopped
+    command: celery -A app.worker worker --loglevel=info --concurrency=4
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - backend_uploads:/app/uploads
+      - celery_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - topworx_network
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.worker inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 20s
+
+  # ── Celery Flower (task monitor) ──────────────────────────────────────────
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: topworx_flower
+    restart: unless-stopped
+    command: >
+      celery -A app.worker flower
+      --port=5555
+      --broker=${CELERY_BROKER_URL}
+    environment:
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+    ports:
+      - "5555:5555"
+    depends_on:
+      - celery
+      - redis
+    networks:
+      - topworx_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5555"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Frontend ──────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./topworx-new
+      dockerfile: Dockerfile
+    container_name: topworx_frontend
+    restart: unless-stopped
+    environment:
+      - REACT_APP_API_URL=${REACT_APP_API_URL}
+      - REACT_APP_ENVIRONMENT=${REACT_APP_ENVIRONMENT:-production}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - topworx_network
+
+  # ── Nginx Reverse Proxy ───────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: topworx_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - media_files:/var/www/media:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - topworx_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_logs:
+  backend_uploads:
+  media_files:
+  celery_logs:
+  flower_logs:
+
+networks:
+  topworx_network:
+    driver: bridge

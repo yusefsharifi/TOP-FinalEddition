@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "topworx"
+version = "1.0.0"
+description = "TOP WorX ERP System"
+readme = "README.md"
+requires-python = ">=3.13"
+license = {text = "MIT"}
+
+[tool.setuptools]
+packages = ["backend"] 

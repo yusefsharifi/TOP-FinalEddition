@@ -1,0 +1,71 @@
+@font-face {
+  font-family: 'IRANSans';
+  src: url('./IRANSans/IRANSans.woff2') format('woff2'),
+       url('./IRANSans/IRANSans.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IRANSans';
+  src: url('./IRANSans/IRANSans_Bold.woff2') format('woff2'),
+       url('./IRANSans/IRANSans_Bold.woff') format('woff');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IRANSans';
+  src: url('./IRANSans/IRANSans_Light.woff2') format('woff2'),
+       url('./IRANSans/IRANSans_Light.woff') format('woff');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IRANSans';
+  src: url('./IRANSans/IRANSans_Medium.woff2') format('woff2'),
+       url('./IRANSans/IRANSans_Medium.woff') format('woff');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Vazir';
+  src: url('./Vazir/Vazir.woff2') format('woff2'),
+       url('./Vazir/Vazir.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Vazir';
+  src: url('./Vazir/Vazir-Bold.woff2') format('woff2'),
+       url('./Vazir/Vazir-Bold.woff') format('woff');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Vazir';
+  src: url('./Vazir/Vazir-Light.woff2') format('woff2'),
+       url('./Vazir/Vazir-Light.woff') format('woff');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Vazir';
+  src: url('./Vazir/Vazir-Medium.woff2') format('woff2'),
+       url('./Vazir/Vazir-Medium.woff') format('woff');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+} 
